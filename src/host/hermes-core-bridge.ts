@@ -21,6 +21,9 @@ export interface ActivatedHermesCore {
   workspaceStateData: Record<string, any>;
   setMode: (modeId: string) => Promise<void>;
   sendPrompt: (text: string, opts?: { skills?: string[] }) => Promise<boolean>;
+  /** The open-file context a send would attach now: a new chat includes it, a mid-chat send only if opted in. */
+  attachEditorContextFor: (attachments?: unknown[]) => unknown;
+  __setTurnForTest: (n: number) => void;
   deactivate: () => Promise<void>;
 }
 
@@ -84,6 +87,12 @@ export function activateHermesCore(options: ActivateHermesCoreOptions): Activate
     workspaceStateData,
     async setMode(modeId: string) {
       await mod.setMode?.(modeId);
+    },
+    __setTurnForTest(n: number) {
+      mod.__setTurnForTest?.(n);
+    },
+    attachEditorContextFor(attachments: unknown[] = []) {
+      return mod.attachEditorContextFor?.(attachments);
     },
     async sendPrompt(text: string, opts?: { skills?: string[] }) {
       return (await mod.sendPrompt?.(text, opts)) === true;

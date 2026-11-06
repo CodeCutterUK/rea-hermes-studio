@@ -290,6 +290,87 @@ describe("Hermes Core Host <-> Shadow DOM Svelte 5 Webview Integration", () => {
     fs.rmSync(tmpVault, { recursive: true, force: true });
   });
 
+  it("shows the open file as an opt-in chip mid-conversation: included only after the user toggles it", async () => {
+    const tmpVault = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-optin-vault-"));
+    fs.writeFileSync(path.join(tmpVault, "OpenNote.md"), "# Open\nBody\n", "utf8");
+
+    const noteAbs = path.join(tmpVault, "OpenNote.md");
+    const shim = createObsidianVscodeShim({
+      vaultBasePath: tmpVault,
+      vaultName: "OptInVault",
+      getSettings: () => ({
+        path: "/nonexistent/hermes-binary-for-unit-test",
+        environment: {},
+        autoStart: false,
+        notifications: "all",
+      }),
+      getActiveEditorState: () => ({
+        absPath: noteAbs,
+        relPath: "OpenNote.md",
+        content: "# Open\nBody\n",
+        languageId: "markdown",
+        cursorLine: 1,
+        selection: undefined,
+      }),
+    });
+
+    const core = activateHermesCore({ vscodeShim: shim, extensionPath: tmpVault });
+
+    const provider = shim._internal.getWebviewViewProvider();
+    const hostToWebviewMessages: any[] = [];
+    let receive: ((msg: any) => void) | undefined;
+    provider.resolveWebviewView({
+      visible: true,
+      badge: undefined,
+      webview: {
+        options: {},
+        html: "",
+        cspSource: "self",
+        asWebviewUri: (u: any) => u,
+        onDidReceiveMessage: (cb: (msg: any) => void) => {
+          receive = cb;
+          return { dispose() {} };
+        },
+        postMessage: async (msg: any) => {
+          hostToWebviewMessages.push(msg);
+          return true;
+        },
+      },
+      onDidChangeVisibility: () => ({ dispose() {} }),
+      onDidDispose: () => ({ dispose() {} }),
+    });
+
+    receive?.({ type: "ready" });
+    await new Promise((r) => setTimeout(r, 30));
+
+    // The open note is shown as a chip.
+    shim._internal.fireActiveEditorChanged?.();
+    await new Promise((r) => setTimeout(r, 30));
+    const chip = () => hostToWebviewMessages.filter((m) => m.type === "editorContext").at(-1)?.file;
+    expect(chip()?.label).toBe("OpenNote.md");
+
+    // A new chat (no turns yet) attaches the open file by default.
+    expect(core.attachEditorContextFor([])).toMatchObject({ kind: "editor", sourceUri: expect.any(String) });
+
+    // Mid-conversation (turn > 0) the file is NOT attached by default.
+    core.__setTurnForTest(2);
+    expect(core.attachEditorContextFor([])).toBeUndefined();
+    expect(chip()?.included).toBe(false);
+
+    // Opting in from the chip attaches it on mid-conversation sends.
+    receive?.({ type: "toggleEditorContext" });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(chip()?.included).toBe(true);
+    expect(core.attachEditorContextFor([])).toMatchObject({ kind: "editor", sourceUri: expect.any(String) });
+
+    // Back in a new chat, the opt-in does not carry over and a new chat attaches by default again.
+    core.__setTurnForTest(0);
+    expect(core.attachEditorContextFor([])).toMatchObject({ kind: "editor" });
+
+    await core.deactivate();
+    fs.rmSync(tmpVault, { recursive: true, force: true });
+  });
+
   it("exposes sendPrompt: rejects empty text and reports false when no agent is connected", async () => {
     const tmpVault = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-sendprompt-vault-"));
     const shim = createObsidianVscodeShim({

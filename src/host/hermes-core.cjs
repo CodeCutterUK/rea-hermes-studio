@@ -1,6 +1,7 @@
 // Auto-generated Hermes Studio host core for Obsidian (from v0.6.0)
 export function createHermesExtensionModule(__vscodeShim, __hostHooks = {}) {
 var __activeController;
+var __activeEditorTracker;
 var t0 = Object.create;
 var os = Object.defineProperty;
 var n0 = Object.getOwnPropertyDescriptor;
@@ -8764,6 +8765,9 @@ var hs = class extends Error {},
             this.client?.alive && (await this.openSession().catch(() => {})));
         })
       );
+    }
+    isNewChat() {
+      return this._model.meta.turn === 0;
     }
     async sendPromptInNewChat(text, opts) {
       const prompt = typeof text === "string" ? text : "";
@@ -34765,6 +34769,7 @@ var cu = class {
   publish;
   current;
   excludedUri;
+  includedUri;
   timer;
   subs = [];
   lastSent = "";
@@ -34779,21 +34784,30 @@ var cu = class {
         ? `Hermes sees ${e.rel} and your selection (${i.includes("\u2013") ? "lines" : "line"} ${i}).`
         : `Hermes sees that you are in ${e.rel}, line ${e.line}.`,
       excluded: this.excludedUri === e.uri,
+      included: this.includedUri === e.uri,
     };
   }
-  toggle() {
+  /**
+   * The chip toggles per file. In a new chat the file is attached unless excluded. Mid-conversation
+   * it is attached only when included, so it is an opt-in add.
+   */
+  toggle(newChat) {
     let e = this.current;
-    e &&
-      ((this.excludedUri = this.excludedUri === e.uri ? void 0 : e.uri),
-      this.changed());
+    if (!e) return;
+    if (newChat) {
+      this.excludedUri = this.excludedUri === e.uri ? void 0 : e.uri;
+    } else {
+      this.includedUri = this.includedUri === e.uri ? void 0 : e.uri;
+    }
+    this.changed();
   }
-  forSend(e) {
+  forSend(e, newChat) {
     this.read();
     let r = this.current;
     if (
       !r ||
-      this.excludedUri === r.uri ||
-      e.some((c) => c.sourceUri === r.uri)
+      e.some((c) => c.sourceUri === r.uri) ||
+      (newChat ? this.excludedUri === r.uri : this.includedUri !== r.uri)
     )
       return;
     let i = this.chip,
@@ -34851,7 +34865,7 @@ var cu = class {
     });
   }
   set(e) {
-    (e?.uri !== this.current?.uri && (this.excludedUri = void 0),
+    (e?.uri !== this.current?.uri && ((this.excludedUri = void 0), (this.includedUri = void 0)),
       (this.current = e),
       this.changed());
   }
@@ -35296,7 +35310,7 @@ function J4(t) {
       () => l.acceptsImages(),
     ),
     f = new su(),
-    h = new cu((x) => s?.post({ type: "editorContext", file: x }));
+    h = (__activeEditorTracker = new cu((x) => s?.post({ type: "editorContext", file: x })));
   t.subscriptions.push(h);
   let y = () => {
       let x = fu();
@@ -35411,7 +35425,7 @@ function J4(t) {
               ct =
                 he.length === 0 && x.text.trimStart().startsWith("/")
                   ? void 0
-                  : h.forSend(F),
+                  : h.forSend(F, l.isNewChat()),
               db = ct ? [...F, ct] : F;
             if (l.working) {
               l.enqueue(x.text, db, he);
@@ -35575,7 +35589,7 @@ function J4(t) {
           v.delete(x.sessionId);
           break;
         case "toggleEditorContext":
-          h.toggle();
+          h.toggle(l.isNewChat());
           break;
         case "contextInfo":
           l.contextReport().then((F) =>
@@ -35753,6 +35767,11 @@ async function X4() {
     deactivate: X4,
     computeMyersDiff: Qn,
     setMode: (modeId) => __activeController?.setMode(modeId, true),
+    // Test hook: the controller's turn count, to exercise a mid-conversation send.
+    __setTurnForTest: (n) => __activeController?.apply([{ op: "meta", patch: { turn: n } }]),
+    // Same attach decision the send handler makes: the open file, if this send should include it.
+    attachEditorContextFor: (attachments = []) =>
+      __activeEditorTracker?.forSend(attachments, __activeController?.isNewChat() ?? true),
     sendPrompt: (text, opts) =>
       __activeController?.sendPromptInNewChat(text, opts) ?? Promise.resolve(false),
   };
