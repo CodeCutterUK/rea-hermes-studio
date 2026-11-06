@@ -290,6 +290,30 @@ describe("Hermes Core Host <-> Shadow DOM Svelte 5 Webview Integration", () => {
     fs.rmSync(tmpVault, { recursive: true, force: true });
   });
 
+  it("exposes sendPrompt: rejects empty text and reports false when no agent is connected", async () => {
+    const tmpVault = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-sendprompt-vault-"));
+    const shim = createObsidianVscodeShim({
+      vaultBasePath: tmpVault,
+      vaultName: "SendPromptVault",
+      getSettings: () => ({
+        path: "/nonexistent/hermes-binary-for-unit-test",
+        environment: {},
+        autoStart: false,
+        notifications: "all",
+      }),
+    });
+
+    const core = activateHermesCore({ vscodeShim: shim, extensionPath: tmpVault });
+
+    expect(await core.sendPrompt("   ")).toBe(false);
+    expect(await core.sendPrompt("")).toBe(false);
+    // No agent is running in tests, so send() refuses rather than queuing a turn.
+    expect(await core.sendPrompt("Help me unblock this factory job: J1")).toBe(false);
+
+    await core.deactivate();
+    fs.rmSync(tmpVault, { recursive: true, force: true });
+  });
+
   it("publishes dynamic effort levels and supported flags based on active model", async () => {
     const tmpVault = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-effort-vault-"));
 

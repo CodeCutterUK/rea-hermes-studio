@@ -341,7 +341,12 @@ export default class HermesStudioPlugin extends Plugin {
     this.addSettingTab(new HermesSettingTab(this.app, this));
 
     // Register Obsidian URI protocol handler: obsidian://hermes-studio?session=...&card=...
+    // obsidian://hermes-studio?text=... opens a new chat and sends the prompt (see sendPrompt).
     this.registerObsidianProtocolHandler("hermes-studio", (params) => {
+      if (typeof params.text === "string" && params.text.length > 0) {
+        void this.sendPrompt(params.text);
+        return;
+      }
       const query = new URLSearchParams(params as Record<string, string>).toString();
       const uri = SimpleUri.from({
         scheme: "obsidian",
@@ -691,6 +696,16 @@ export default class HermesStudioPlugin extends Plugin {
         callback: () => c.run(),
       });
     }
+  }
+
+  /**
+   * Opens a new Hermes Studio chat and sends `text` as its first prompt. Returns false if
+   * the text is empty or the core is not active. Other plugins call this via
+   * `app.plugins.plugins["hermes-studio"].sendPrompt(text)`.
+   */
+  async sendPrompt(text: string, opts?: { skills?: string[] }): Promise<boolean> {
+    if (!this.core) return false;
+    return this.core.sendPrompt(text, opts);
   }
 
   async executeHermesCommand(commandId: string, ...args: any[]): Promise<any> {

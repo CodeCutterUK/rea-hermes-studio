@@ -20,6 +20,7 @@ export interface ActivatedHermesCore {
   subscriptions: Array<{ dispose?: () => any }>;
   workspaceStateData: Record<string, any>;
   setMode: (modeId: string) => Promise<void>;
+  sendPrompt: (text: string, opts?: { skills?: string[] }) => Promise<boolean>;
   deactivate: () => Promise<void>;
 }
 
@@ -83,6 +84,9 @@ export function activateHermesCore(options: ActivateHermesCoreOptions): Activate
     workspaceStateData,
     async setMode(modeId: string) {
       await mod.setMode?.(modeId);
+    },
+    async sendPrompt(text: string, opts?: { skills?: string[] }) {
+      return (await mod.sendPrompt?.(text, opts)) === true;
     },
     async deactivate() {
       try {

@@ -8765,6 +8765,12 @@ var hs = class extends Error {},
         })
       );
     }
+    async sendPromptInNewChat(text, opts) {
+      const prompt = typeof text === "string" ? text : "";
+      if (!prompt.trim()) return false;
+      await this.newChat();
+      return (await this.send(prompt, [], opts?.skills ?? [])) === true;
+    }
     async contextReport() {
       if (this.turn || this.loading || this.probe || this.disposed) return;
       let e = this.client,
@@ -35663,6 +35669,13 @@ function J4(t) {
         "hermesStudio.newChat",
         () => (s?.visible || s?.reveal(), l.newChat()),
       ),
+      K.commands.registerCommand(
+        "hermesStudio.sendPrompt",
+        (text, opts) => {
+          s?.visible || s?.reveal();
+          return l.sendPromptInNewChat(text, opts);
+        },
+      ),
       K.commands.registerCommand("hermesStudio.showSessions", () =>
         s?.showSessions(),
       ),
@@ -35740,5 +35753,7 @@ async function X4() {
     deactivate: X4,
     computeMyersDiff: Qn,
     setMode: (modeId) => __activeController?.setMode(modeId, true),
+    sendPrompt: (text, opts) =>
+      __activeController?.sendPromptInNewChat(text, opts) ?? Promise.resolve(false),
   };
 }
