@@ -1,5 +1,6 @@
 import { type App, PluginSettingTab, Setting } from "obsidian";
 import { defaultTerminalShell } from "./host/integrated-terminal";
+import { buildLabel } from "./build-identity";
 import type HermesStudioPlugin from "./main";
 import { clampTerminalFontSize } from "./webview/terminal-panel";
 
@@ -75,7 +76,7 @@ export class HermesSettingTab extends PluginSettingTab {
     }
 
     const title = containerEl.ownerDocument.createElement("h2");
-    title.textContent = "Hermes Studio";
+    title.textContent = buildLabel(this.plugin.manifest?.version ?? "");
     containerEl.appendChild(title);
 
     new Setting(containerEl)
