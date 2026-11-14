@@ -347,6 +347,11 @@ export default class HermesStudioPlugin extends Plugin {
         void this.sendPrompt(params.text);
         return;
       }
+      // obsidian://hermes-studio?open=<session id> reopens a saved chat.
+      if (typeof params.open === "string" && params.open.length > 0) {
+        void this.openSession(params.open);
+        return;
+      }
       const query = new URLSearchParams(params as Record<string, string>).toString();
       const uri = SimpleUri.from({
         scheme: "obsidian",
@@ -706,6 +711,24 @@ export default class HermesStudioPlugin extends Plugin {
   async sendPrompt(text: string, opts?: { skills?: string[] }): Promise<boolean> {
     if (!this.core) return false;
     return this.core.sendPrompt(text, opts);
+  }
+
+  /**
+   * Like sendPrompt, but resolves to `{ sent, sessionId }`: the id of the new chat, so a caller can
+   * save it and reopen it with openSession later. `sessionId` is null when nothing was sent.
+   */
+  async sendPromptWithId(
+    text: string,
+    opts?: { skills?: string[] },
+  ): Promise<{ sent: boolean; sessionId: string | null }> {
+    if (!this.core) return { sent: false, sessionId: null };
+    return this.core.sendPromptWithId(text, opts);
+  }
+
+  /** Reopens a saved chat by session id. Resolves false when it cannot be opened. */
+  async openSession(sessionId: string): Promise<boolean> {
+    if (!this.core) return false;
+    return this.core.openSession(sessionId);
   }
 
   async executeHermesCommand(commandId: string, ...args: any[]): Promise<any> {

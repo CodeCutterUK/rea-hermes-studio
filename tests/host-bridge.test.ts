@@ -395,6 +395,34 @@ describe("Hermes Core Host <-> Shadow DOM Svelte 5 Webview Integration", () => {
     fs.rmSync(tmpVault, { recursive: true, force: true });
   });
 
+  it("exposes sendPromptWithId and openSession: no id and no session when no agent is connected", async () => {
+    const tmpVault = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-sessionlink-vault-"));
+    const shim = createObsidianVscodeShim({
+      vaultBasePath: tmpVault,
+      vaultName: "SessionLinkVault",
+      getSettings: () => ({
+        path: "/nonexistent/hermes-binary-for-unit-test",
+        environment: {},
+        autoStart: false,
+        notifications: "all",
+      }),
+    });
+
+    const core = activateHermesCore({ vscodeShim: shim, extensionPath: tmpVault });
+
+    expect(await core.sendPromptWithId("   ")).toEqual({ sent: false, sessionId: null });
+    // No agent is running in tests, so nothing is sent and there is no chat to report.
+    expect(await core.sendPromptWithId("Help me unblock this factory job: J1")).toEqual({
+      sent: false,
+      sessionId: null,
+    });
+    // Opening an unknown or empty id must not throw or claim success.
+    expect(await core.openSession("")).toBe(false);
+
+    await core.deactivate();
+    fs.rmSync(tmpVault, { recursive: true, force: true });
+  });
+
   it("publishes dynamic effort levels and supported flags based on active model", async () => {
     const tmpVault = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-effort-vault-"));
 

@@ -21,6 +21,13 @@ export interface ActivatedHermesCore {
   workspaceStateData: Record<string, any>;
   setMode: (modeId: string) => Promise<void>;
   sendPrompt: (text: string, opts?: { skills?: string[] }) => Promise<boolean>;
+  /** Sends like sendPrompt, and returns the id of the chat it went into (null when nothing was sent). */
+  sendPromptWithId: (
+    text: string,
+    opts?: { skills?: string[] },
+  ) => Promise<{ sent: boolean; sessionId: string | null }>;
+  /** Reopens a saved chat by session id. False when it cannot be opened. */
+  openSession: (sessionId: string) => Promise<boolean>;
   /** The open-file context a send would attach now: a new chat includes it, a mid-chat send only if opted in. */
   attachEditorContextFor: (attachments?: unknown[]) => unknown;
   __setTurnForTest: (n: number) => void;
@@ -96,6 +103,13 @@ export function activateHermesCore(options: ActivateHermesCoreOptions): Activate
     },
     async sendPrompt(text: string, opts?: { skills?: string[] }) {
       return (await mod.sendPrompt?.(text, opts)) === true;
+    },
+    async sendPromptWithId(text: string, opts?: { skills?: string[] }) {
+      const r = await mod.sendPromptWithId?.(text, opts);
+      return { sent: r?.sent === true, sessionId: r?.sessionId ?? null };
+    },
+    async openSession(sessionId: string) {
+      return (await mod.openSession?.(sessionId)) === true;
     },
     async deactivate() {
       try {

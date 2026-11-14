@@ -8771,9 +8771,11 @@ var hs = class extends Error {},
     }
     async sendPromptInNewChat(text, opts) {
       const prompt = typeof text === "string" ? text : "";
-      if (!prompt.trim()) return false;
+      if (!prompt.trim()) return { sent: false, sessionId: null };
       await this.newChat();
-      return (await this.send(prompt, [], opts?.skills ?? [])) === true;
+      const sent = (await this.send(prompt, [], opts?.skills ?? [])) === true;
+      // The chat the prompt went into. Null when nothing was sent (no agent connected).
+      return { sent, sessionId: sent ? (this.session?.id ?? null) : null };
     }
     async contextReport() {
       if (this.turn || this.loading || this.probe || this.disposed) return;
@@ -35773,6 +35775,21 @@ async function X4() {
     attachEditorContextFor: (attachments = []) =>
       __activeEditorTracker?.forSend(attachments, __activeController?.isNewChat() ?? true),
     sendPrompt: (text, opts) =>
-      __activeController?.sendPromptInNewChat(text, opts) ?? Promise.resolve(false),
+      __activeController?.sendPromptInNewChat(text, opts).then((r) => r.sent) ??
+      Promise.resolve(false),
+    // Like sendPrompt, but also returns the new chat's id so a caller can reopen it later.
+    sendPromptWithId: (text, opts) =>
+      __activeController?.sendPromptInNewChat(text, opts) ??
+      Promise.resolve({ sent: false, sessionId: null }),
+    // Reopens a saved chat by id. False when no Studio core is active or the chat cannot be opened.
+    openSession: async (id) => {
+      if (!__activeController || typeof id !== "string" || !id.trim()) return false;
+      try {
+        await __activeController.openSaved(id);
+        return __activeController._model.meta.sessionId === id;
+      } catch {
+        return false;
+      }
+    },
   };
 }
