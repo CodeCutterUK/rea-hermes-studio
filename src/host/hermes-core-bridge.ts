@@ -32,6 +32,12 @@ export interface ActivatedHermesCore {
   hermesBinary: () => string | undefined;
   /** Reopens a saved chat by session id. False when it cannot be opened. */
   openSession: (sessionId: string) => Promise<boolean>;
+  /** Switches the chat view to a tab (chat, learning, memory, capabilities, agents, terminal). */
+  showTab: (tab: string) => Promise<boolean>;
+  /** Clears the chat view to the state a fresh plugin load shows. Starts no server session. */
+  blankChat: () => Promise<boolean>;
+  /** The chat currently open in the view, or null when none is. */
+  currentSessionId: () => string | null;
   /** The open-file context a send would attach now: a new chat includes it, a mid-chat send only if opted in. */
   attachEditorContextFor: (attachments?: unknown[]) => unknown;
   __setTurnForTest: (n: number) => void;
@@ -116,6 +122,15 @@ export function activateHermesCore(options: ActivateHermesCoreOptions): Activate
     hermesBinary: () => mod.hermesBinary?.(),
     async openSession(sessionId: string) {
       return (await mod.openSession?.(sessionId)) === true;
+    },
+    async showTab(tab: string) {
+      return (await mod.showTab?.(tab)) === true;
+    },
+    async blankChat() {
+      return (await mod.blankChat?.()) === true;
+    },
+    currentSessionId() {
+      return mod.currentSessionId?.() ?? null;
     },
     async deactivate() {
       try {

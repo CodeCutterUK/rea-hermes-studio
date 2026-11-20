@@ -802,6 +802,23 @@ export default class HermesStudioPlugin extends Plugin {
     return this.core.openSession(sessionId);
   }
 
+  /** Switches the chat view to a tab. Other plugins call this via `app.plugins.plugins["hermes-studio"]`. */
+  async showTab(tab: string): Promise<boolean> {
+    if (!this.core) return false;
+    return this.core.showTab(tab);
+  }
+
+  /** Clears the chat view to a fresh-load state. Starts no server session. */
+  async blankChat(): Promise<boolean> {
+    if (!this.core) return false;
+    return this.core.blankChat();
+  }
+
+  /** The chat open in the view, or null when none is. */
+  currentSessionId(): string | null {
+    return this.core?.currentSessionId() ?? null;
+  }
+
   async executeHermesCommand(commandId: string, ...args: any[]): Promise<any> {
     return this.vscodeShim?.commands.executeCommand(commandId, ...args);
   }

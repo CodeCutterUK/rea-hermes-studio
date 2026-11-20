@@ -119,6 +119,74 @@ describe("Hermes Core Host <-> Shadow DOM Svelte 5 Webview Integration", () => {
     fs.rmSync(tmpVault, { recursive: true, force: true });
   });
 
+  it("showTab reaches the mounted webview as a showTab message, and blankChat starts no session", async () => {
+    const tmpVault = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-showtab-vault-"));
+    const shim = createObsidianVscodeShim({
+      vaultBasePath: tmpVault,
+      vaultName: "ShowTabVault",
+      getSettings: () => ({
+        path: "/nonexistent/hermes-binary-for-unit-test",
+        environment: {},
+        autoStart: false,
+        notifications: "all",
+      }),
+    });
+    const core = activateHermesCore({ vscodeShim: shim, extensionPath: tmpVault });
+    const provider = shim._internal.getWebviewViewProvider();
+
+    const hostEl = document.createElement("div");
+    document.body.appendChild(hostEl);
+    const shadowRoot = hostEl.attachShadow({ mode: "open" });
+    const hostToWebviewMessages: any[] = [];
+    let webviewReceiveCallback: ((msg: any) => void) | undefined;
+    let mounted: ReturnType<typeof mountHermesWebview> | undefined;
+    provider.resolveWebviewView({
+      visible: true,
+      badge: undefined as any,
+      webview: {
+        options: {},
+        html: "",
+        cspSource: "self",
+        asWebviewUri: (u: any) => u,
+        onDidReceiveMessage: (cb: (msg: any) => void) => {
+          webviewReceiveCallback = cb;
+          return { dispose() {} };
+        },
+        postMessage: async (msg: any) => {
+          hostToWebviewMessages.push(msg);
+          mounted?.postMessageToWebview(msg);
+          return true;
+        },
+      },
+      onDidChangeVisibility: () => ({ dispose() {} }),
+      onDidDispose: () => ({ dispose() {} }),
+    });
+    mounted = mountHermesWebview({
+      shadowRoot,
+      place: "side",
+      onMessageFromWebview: (msg) => webviewReceiveCallback?.(msg),
+    });
+    await new Promise((r) => setTimeout(r, 80));
+
+    // The blank state: no chat is open and no server session was started.
+    expect(await core.blankChat()).toBe(true);
+    expect(core.currentSessionId()).toBeNull();
+    expect(hostToWebviewMessages.some((m) => m.type === "newSession")).toBe(false);
+
+    // Switching the view to the Learning tab reaches the webview as a showTab message.
+    expect(await core.showTab("learning")).toBe(true);
+    await new Promise((r) => setTimeout(r, 40));
+    expect(hostToWebviewMessages.some((m) => m.type === "showTab" && m.tab === "learning")).toBe(true);
+
+    // An unknown tab is refused by the webview's own tab check and reaches it as an ignored message.
+    expect(await core.showTab("not-a-tab")).toBe(true);
+
+    mounted.destroy();
+    await core.deactivate();
+    hostEl.remove();
+    fs.rmSync(tmpVault, { recursive: true, force: true });
+  });
+
   it("attaches a single-line active editor selection and adopts an async editor tab leaf", async () => {
     const tmpVault = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-sel-vault-"));
     const noteAbs = path.join(tmpVault, "SingleLine.md");
@@ -367,6 +435,15 @@ describe("Hermes Core Host <-> Shadow DOM Svelte 5 Webview Integration", () => {
     core.__setTurnForTest(0);
     expect(core.attachEditorContextFor([])).toMatchObject({ kind: "editor" });
 
+    // blankChat is the fresh-load state. Clear the mid-chat opt-in first, so the file attaches only if
+    // blankChat itself puts the turn back to 0 (the rule reads turn, not the opt-in, for a new chat).
+    core.__setTurnForTest(2);
+    receive?.({ type: "toggleEditorContext" });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(core.attachEditorContextFor([])).toBeUndefined();
+    await core.blankChat();
+    expect(core.attachEditorContextFor([])).toMatchObject({ kind: "editor" });
+
     await core.deactivate();
     fs.rmSync(tmpVault, { recursive: true, force: true });
   });
@@ -418,6 +495,33 @@ describe("Hermes Core Host <-> Shadow DOM Svelte 5 Webview Integration", () => {
     });
     // Opening an unknown or empty id must not throw or claim success.
     expect(await core.openSession("")).toBe(false);
+
+    await core.deactivate();
+    fs.rmSync(tmpVault, { recursive: true, force: true });
+  });
+
+  it("exposes showTab, blankChat and currentSessionId: safe with no agent and no open chat", async () => {
+    const tmpVault = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-follow-vault-"));
+    const shim = createObsidianVscodeShim({
+      vaultBasePath: tmpVault,
+      vaultName: "FollowVault",
+      getSettings: () => ({
+        path: "/nonexistent/hermes-binary-for-unit-test",
+        environment: {},
+        autoStart: false,
+        notifications: "all",
+      }),
+    });
+
+    const core = activateHermesCore({ vscodeShim: shim, extensionPath: tmpVault });
+
+    // No chat is open until something is sent, so there is no id to report.
+    expect(core.currentSessionId()).toBeNull();
+    // A blank view starts no server session; with no agent it still reports success.
+    expect(await core.blankChat()).toBe(true);
+    expect(core.currentSessionId()).toBeNull();
+    // A non-string or empty tab is refused, not forwarded.
+    expect(await core.showTab("")).toBe(false);
 
     await core.deactivate();
     fs.rmSync(tmpVault, { recursive: true, force: true });

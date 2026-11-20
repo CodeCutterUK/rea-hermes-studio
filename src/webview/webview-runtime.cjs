@@ -4702,6 +4702,9 @@ var zs,
                 ? this.toggleSessions()
                 : (this.setTab(`chat`), this.openSessions());
               break;
+            case `showTab`:
+              hs(e.tab) && this.setTab(e.tab);
+              break;
             case `background`:
               Array.isArray(e.sessions) && (this.background = e.sessions);
               break;

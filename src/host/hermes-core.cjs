@@ -1,6 +1,7 @@
 // Auto-generated Hermes Studio host core for Obsidian (from v0.6.0)
 export function createHermesExtensionModule(__vscodeShim, __hostHooks = {}) {
 var __activeController;
+var __activeHome;
 var __activeEditorTracker;
 var t0 = Object.create;
 var os = Object.defineProperty;
@@ -8766,6 +8767,37 @@ var hs = class extends Error {},
         })
       );
     }
+    // The view a fresh plugin load shows: no chat, no server session. The first send opens one
+    // (send() calls ensureSession). A running turn is parked by leaveCurrentTurn, not stopped.
+    blankChat() {
+      return (
+        this.rememberCurrentSession(),
+        this.withdrawPendingTurn(),
+        this.handBackQueue(),
+        this.mutex.run(async () => {
+          (this.rememberCurrentSession(),
+            await this.leaveCurrentTurn(),
+            (this.session = void 0),
+            (this.pendingSession = void 0),
+            (this.limitPrompt = void 0),
+            this.apply([
+              { op: "clear" },
+              {
+                op: "meta",
+                patch: {
+                  title: null,
+                  usage: null,
+                  sessionId: null,
+                  limit: null,
+                  busy: !1,
+                  // A fresh load is turn 0, so the open-file attach rule treats the next send as a new chat.
+                  turn: 0,
+                },
+              },
+            ]));
+        })
+      );
+    }
     isNewChat() {
       return this._model.meta.turn === 0;
     }
@@ -10275,6 +10307,7 @@ var nP = 30,
     flushTimer;
     focusPending = !1;
     sessionsPending = !1;
+    pendingTab;
     draft;
     disposables = [];
     visibility = new Me.EventEmitter();
@@ -10432,6 +10465,15 @@ var nP = 30,
         ? this.postTo(e, { type: "showSessions" })
         : (this.sessionsPending = !0);
     }
+    // Switches the chat view to a tab (chat, learning, memory, capabilities, agents, terminal).
+    // Queued until the webview is ready, like showSessions.
+    async showTab(tab) {
+      await this.showHome();
+      let e = this.home;
+      e?.ready
+        ? this.postTo(e, { type: "showTab", tab })
+        : (this.pendingTab = tab);
+    }
     receive(e, r) {
       if (e !== this.side && e !== this.editor) return;
       if (!uw(r)) {
@@ -10462,7 +10504,10 @@ var nP = 30,
                 this.postTo(e, { type: "focusComposer" })),
               this.sessionsPending &&
                 ((this.sessionsPending = !1),
-                this.postTo(e, { type: "showSessions" }))),
+                this.postTo(e, { type: "showSessions" })),
+              this.pendingTab &&
+                (this.postTo(e, { type: "showTab", tab: this.pendingTab }),
+                (this.pendingTab = void 0))),
             this.onMessage(r));
           return;
         case "draft":
@@ -35631,6 +35676,7 @@ function J4(t) {
       }
     };
   s = new nr(t.extensionUri, l, L, n);
+  __activeHome = s;
   let R = s,
     ie = new uu({
       chatVisible: () => R.visible,
@@ -35780,7 +35826,7 @@ async function X4() {
   try {
     await QT?.shutdown();
   } finally {
-    (cb?.dispose(), (cb = void 0));
+    (cb?.dispose(), (cb = void 0), (__activeHome = void 0));
   }
 }
 
@@ -35817,5 +35863,19 @@ async function X4() {
         return false;
       }
     },
+    // Switches the chat view to a tab (chat, learning, memory, capabilities, agents, terminal).
+    showTab: async (tab) => {
+      if (!__activeHome || typeof tab !== "string" || !tab.trim()) return false;
+      await __activeHome.showTab(tab);
+      return true;
+    },
+    // Clears the chat view to the state a fresh plugin load shows. Starts no server session.
+    blankChat: async () => {
+      if (!__activeController) return false;
+      await __activeController.blankChat();
+      return true;
+    },
+    // The chat currently open in the view, or null when none is.
+    currentSessionId: () => __activeController?._model.meta.sessionId ?? null,
   };
 }
