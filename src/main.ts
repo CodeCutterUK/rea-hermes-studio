@@ -791,6 +791,7 @@ export default class HermesStudioPlugin extends Plugin {
     opts?: { skills?: string[] },
   ): Promise<{ sent: boolean; sessionId: string | null }> {
     if (!this.core) return { sent: false, sessionId: null };
+    await this.prepareChatFolder();
     return this.core.sendPromptWithId(text, opts);
   }
 
