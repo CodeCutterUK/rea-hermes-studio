@@ -1,3 +1,4 @@
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -10,6 +11,7 @@ import {
   type TFile,
   type WorkspaceLeaf,
 } from "obsidian";
+import { chatFolderFor, type ProjectFolder, projectSlugForNote } from "./host/chat-project";
 import { type ActivatedHermesCore, activateHermesCore } from "./host/hermes-core-bridge";
 import { VaultNoteTracker } from "./host/note-tracker";
 import { createObsidianVscodeShim, SimpleUri } from "./host/obsidian-shim";
@@ -18,6 +20,7 @@ import {
   OBSIDIAN_SKILLS_SYNC_INTERVAL_MS,
   syncObsidianSkills,
 } from "./host/obsidian-skills-sync";
+import { createProjectFolderLookup, runHermesCli } from "./host/project-folder-lookup";
 import { VaultDocumentRouter } from "./host/vault-document-router";
 import { createWorkspaceLeafHost, type WorkspaceLeafHost } from "./host/workspace-leaf-host";
 import { DEFAULT_HERMES_SETTINGS, type HermesPluginSettings, HermesSettingTab } from "./settings";
@@ -64,6 +67,8 @@ export default class HermesStudioPlugin extends Plugin {
   router!: VaultDocumentRouter;
   leaves!: WorkspaceLeafHost;
   private core: ActivatedHermesCore | undefined;
+  private nextChatFolder: ProjectFolder | undefined;
+  private projectFolders: ReturnType<typeof createProjectFolderLookup> | undefined;
   private obsidianSkillsTail: Promise<void> = Promise.resolve();
   private ribbonEl: HTMLElement | undefined;
   private activeSideView: HermesStudioView | undefined;
@@ -301,8 +306,13 @@ export default class HermesStudioPlugin extends Plugin {
       },
     });
 
+    // The working folder for the next new chat, resolved from the open note before the chat
+    // is created (see prepareChatFolder). Unset means the vault root.
+    this.nextChatFolder = undefined;
+
     // Activate Hermes Studio core engine
     this.core = activateHermesCore({
+      chatFolder: () => this.nextChatFolder,
       vscodeShim: this.vscodeShim,
       extensionPath: this.getPluginDirPath(),
       pluginVersion: this.manifest?.version || "0.6.19",
@@ -651,6 +661,7 @@ export default class HermesStudioPlugin extends Plugin {
         name: "New Chat",
         run: async () => {
           await this.leaves.reveal(HERMES_SIDE_VIEW_TYPE, { placement: "right" });
+          await this.prepareChatFolder();
           await this.executeHermesCommand("hermesStudio.newChat");
         },
       },
@@ -704,12 +715,64 @@ export default class HermesStudioPlugin extends Plugin {
   }
 
   /**
+   * Picks the folder the next new chat runs in: the Hermes project for the open note, or the
+   * vault root when the note is not in a project. Never throws; a failed lookup means the vault.
+   */
+  async prepareChatFolder(): Promise<void> {
+    const vaultFolder: ProjectFolder = {
+      path: this.getVaultBasePath(),
+      name: this.app?.vault?.getName?.() || path.basename(this.getVaultBasePath()),
+    };
+    try {
+      this.refreshTrackerFromWorkspace({ silent: true });
+      const relPath = this.noteTracker.current?.relPath;
+      const lookup = this.projectLookup();
+      const readIdeaText = (rel: string) => {
+        try {
+          return fsSync.readFileSync(path.join(this.getVaultBasePath(), rel), "utf8");
+        } catch {
+          return undefined;
+        }
+      };
+      const projects = await this.projectFoldersFor(relPath, readIdeaText, lookup);
+      this.nextChatFolder = chatFolderFor(relPath, projects, vaultFolder, readIdeaText);
+    } catch {
+      this.nextChatFolder = vaultFolder;
+    }
+  }
+
+  private projectLookup() {
+    if (!this.projectFolders) {
+      // The lookup runs the same hermes binary the chat uses (resolved by the core).
+      const binary = this.core?.hermesBinary?.() ?? "hermes";
+      this.projectFolders = createProjectFolderLookup(runHermesCli(binary, { ...process.env }));
+    }
+    return this.projectFolders;
+  }
+
+  // Looks up the project folder for the slug the open note maps to. Only that one slug is
+  // queried, so opening a note does not run a CLI call per project.
+  private async projectFoldersFor(
+    relPath: string | undefined,
+    readIdeaText: (rel: string) => string | undefined,
+    lookup: ReturnType<typeof createProjectFolderLookup>,
+  ): Promise<Map<string, ProjectFolder>> {
+    const out = new Map<string, ProjectFolder>();
+    const slug = relPath ? projectSlugForNote(relPath, readIdeaText) : undefined;
+    if (!slug) return out;
+    const folder = await lookup.folderForSlug(slug);
+    if (folder) out.set(slug, folder);
+    return out;
+  }
+
+  /**
    * Opens a new Hermes Studio chat and sends `text` as its first prompt. Returns false if
    * the text is empty or the core is not active. Other plugins call this via
    * `app.plugins.plugins["hermes-studio"].sendPrompt(text)`.
    */
   async sendPrompt(text: string, opts?: { skills?: string[] }): Promise<boolean> {
     if (!this.core) return false;
+    await this.prepareChatFolder();
     return this.core.sendPrompt(text, opts);
   }
 

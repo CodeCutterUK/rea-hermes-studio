@@ -8845,11 +8845,15 @@ var hs = class extends Error {},
         this._model.meta.sessionId === e &&
           this.apply([{ op: "meta", patch: { title: r } }]));
     }
+    sessionFolderFor(id) {
+      let cwd = this.recentSessions.get(id)?.cwd;
+      return cwd ? { path: cwd, name: cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd } : void 0;
+    }
     rememberCurrentSession(e = !1) {
       let r = this.session?.id ?? this._model.meta.sessionId;
       if (!r || this.deleted?.ids?.has(r)) return;
       if (!this._model.items.some((s) => s.kind === "user")) return;
-      let i = this.deps.folder()?.path,
+      let i = this.session?.cwd ?? this.deps.folder()?.path,
         n = this.titleOf(r, this._model);
       n && n !== "New chat" && this.knownTitles.set(r, n);
       let o = this.recentSessions.get(r);
@@ -8953,7 +8957,7 @@ var hs = class extends Error {},
             return;
           }
           await this.leaveCurrentTurn();
-          let n = this.deps.folder();
+          let n = this.sessionFolderFor(e) ?? this.deps.folder();
           if (!n) {
             this.setConnection({ state: "noFolder" });
             return;
@@ -9195,7 +9199,7 @@ var hs = class extends Error {},
       let e = this.session;
       if (e && this.client?.alive && e.clientId === this.client.id) return e;
       if (this.disposed) throw new Error("Hermes Studio is shutting down");
-      let r = this.deps.folder();
+      let r = this.deps.chatFolder?.() ?? this.deps.folder();
       if (!r)
         throw (
           this.setConnection({ state: "noFolder" }),
@@ -35213,6 +35217,7 @@ function J4(t) {
     l,
     m;
   __activeController = l = new gs({
+      chatFolder: () => __hostHooks?.chatFolder?.(),
       folder: () => {
         let x = K.workspace.workspaceFolders?.[0];
         return x && x.uri.scheme === "file"
@@ -35771,6 +35776,11 @@ async function X4() {
     setMode: (modeId) => __activeController?.setMode(modeId, true),
     // Test hook: the controller's turn count, to exercise a mid-conversation send.
     __setTurnForTest: (n) => __activeController?.apply([{ op: "meta", patch: { turn: n } }]),
+    // The hermes binary a new chat would launch (the same resolution the chat uses), for CLI lookups.
+    hermesBinary: () => {
+      let x = fu();
+      return x.ok ? x.command : void 0;
+    },
     // Same attach decision the send handler makes: the open file, if this send should include it.
     attachEditorContextFor: (attachments = []) =>
       __activeEditorTracker?.forSend(attachments, __activeController?.isNewChat() ?? true),

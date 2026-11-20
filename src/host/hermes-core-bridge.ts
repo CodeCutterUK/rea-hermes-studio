@@ -14,6 +14,8 @@ export interface ActivateHermesCoreOptions {
   getCustomEnv?: () => Record<string, string>;
   initialMode?: string;
   onModeChange?: (modeId: string) => void;
+  /** Working folder for a new chat (the project for the open note). Unset or undefined = the vault. */
+  chatFolder?: () => { path: string; name: string } | undefined;
 }
 
 export interface ActivatedHermesCore {
@@ -26,6 +28,8 @@ export interface ActivatedHermesCore {
     text: string,
     opts?: { skills?: string[] },
   ) => Promise<{ sent: boolean; sessionId: string | null }>;
+  /** The hermes binary the chat launches, or undefined when none is found. */
+  hermesBinary: () => string | undefined;
   /** Reopens a saved chat by session id. False when it cannot be opened. */
   openSession: (sessionId: string) => Promise<boolean>;
   /** The open-file context a send would attach now: a new chat includes it, a mid-chat send only if opted in. */
@@ -85,6 +89,7 @@ export function activateHermesCore(options: ActivateHermesCoreOptions): Activate
     getCustomEnv: options.getCustomEnv,
     getInitialMode: () => options.initialMode ?? "default",
     onModeChange: options.onModeChange,
+    chatFolder: options.chatFolder,
   });
 
   mod.activate(extContext);
@@ -108,6 +113,7 @@ export function activateHermesCore(options: ActivateHermesCoreOptions): Activate
       const r = await mod.sendPromptWithId?.(text, opts);
       return { sent: r?.sent === true, sessionId: r?.sessionId ?? null };
     },
+    hermesBinary: () => mod.hermesBinary?.(),
     async openSession(sessionId: string) {
       return (await mod.openSession?.(sessionId)) === true;
     },

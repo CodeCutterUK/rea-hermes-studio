@@ -624,3 +624,27 @@ rl.on("line", (line) => {
     fs.rmSync(tmpVault, { recursive: true, force: true });
   });
 });
+
+describe("chat working folder (project cwd)", () => {
+  it("passes chatFolder through to the core and exposes the hermes binary it would launch", async () => {
+    const tmpVault = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-chatfolder-vault-"));
+    const shim = createObsidianVscodeShim({
+      vaultBasePath: tmpVault,
+      vaultName: "ChatFolderVault",
+      getSettings: () => ({
+        path: "/nonexistent/hermes-binary-for-unit-test",
+        trace: false,
+        notifications: "all",
+        autoStart: false,
+      }),
+    } as any);
+    const core = activateHermesCore({
+      vscodeShim: shim,
+      extensionPath: tmpVault,
+      chatFolder: () => ({ path: "/repos/software-factory", name: "software-factory" }),
+    });
+    expect(core.hermesBinary()).toBeUndefined();
+    await core.deactivate();
+    fs.rmSync(tmpVault, { recursive: true, force: true });
+  });
+});
