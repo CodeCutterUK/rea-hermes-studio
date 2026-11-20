@@ -49,7 +49,6 @@ describe("projectSlugForNote", () => {
   });
 
   it("returns undefined for an idea with no project, and for notes outside Projects/ and Ideas/", () => {
-    expect(projectSlugForNote("Ideas/Inbox/draft.md", NO_IDEA)).toBeUndefined();
     expect(projectSlugForNote("Ideas/20261113-0044-audit/idea.md", NO_IDEA)).toBeUndefined();
     expect(projectSlugForNote("People/Mark.md", NO_IDEA)).toBeUndefined();
     expect(projectSlugForNote("README.md", NO_IDEA)).toBeUndefined();
@@ -82,6 +81,37 @@ describe("chatFolderFor", () => {
   it("routes an idea note through its project", () => {
     const read = () => "---\nproject: ttm\n---\n";
     expect(chatFolderFor("Ideas/20261113-0044-audit/idea.md", PROJECTS, VAULT, read)).toEqual(TTM);
+  });
+});
+
+describe("capture drafts in Ideas/Inbox name their project in their own frontmatter", () => {
+  const DRAFT = "Ideas/Inbox/20261026-0900-isolate-tick-lock-in-tests.md";
+  const draftText = (project: string) => (p: string) =>
+    p === DRAFT ? `---\ntitle: x\nproject: ${project}\nrequest: draft\n---\n## What\nx\n` : undefined;
+
+  it("reads the draft's project from its own frontmatter", () => {
+    expect(projectSlugForNote(DRAFT, NO_IDEA, draftText("factory"))).toBe("factory");
+    expect(projectSlugForNote(DRAFT, NO_IDEA, draftText("ttm"))).toBe("ttm");
+  });
+
+  it("routes a draft to its project folder", () => {
+    expect(chatFolderFor(DRAFT, PROJECTS, VAULT, NO_IDEA, draftText("factory"))).toEqual(FACTORY);
+    expect(chatFolderFor(DRAFT, PROJECTS, VAULT, NO_IDEA, draftText("ttm"))).toEqual(TTM);
+  });
+
+  it("falls back to the vault for a draft with no project, or with no readable text", () => {
+    expect(projectSlugForNote(DRAFT, NO_IDEA, () => "---\nrequest: draft\n---\n")).toBeUndefined();
+    expect(chatFolderFor(DRAFT, PROJECTS, VAULT, NO_IDEA, () => undefined)).toEqual(VAULT);
+    expect(chatFolderFor(DRAFT, PROJECTS, VAULT, NO_IDEA)).toEqual(VAULT);
+  });
+
+  it("does not treat a nested Inbox note or an archived one as a draft", () => {
+    expect(projectSlugForNote("Ideas/Inbox/_archive/x.md", NO_IDEA, draftText("factory"))).toBeUndefined();
+    expect(projectSlugForNote("Ideas/Inbox/sub/x.md", NO_IDEA, draftText("factory"))).toBeUndefined();
+  });
+
+  it("an unknown draft project still falls back to the vault (no folder for that slug)", () => {
+    expect(chatFolderFor(DRAFT, PROJECTS, VAULT, NO_IDEA, draftText("mini"))).toEqual(VAULT);
   });
 });
 

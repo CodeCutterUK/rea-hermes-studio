@@ -740,7 +740,7 @@ export default class HermesStudioPlugin extends Plugin {
         }
       };
       const projects = await this.projectFoldersFor(relPath, readIdeaText, lookup);
-      this.nextChatFolder = chatFolderFor(relPath, projects, vaultFolder, readIdeaText);
+      this.nextChatFolder = chatFolderFor(relPath, projects, vaultFolder, readIdeaText, readIdeaText);
     } catch {
       this.nextChatFolder = vaultFolder;
     }
@@ -763,7 +763,8 @@ export default class HermesStudioPlugin extends Plugin {
     lookup: ReturnType<typeof createProjectFolderLookup>,
   ): Promise<Map<string, ProjectFolder>> {
     const out = new Map<string, ProjectFolder>();
-    const vaultFolder = relPath ? projectSlugForNote(relPath, readIdeaText) : undefined;
+    // readIdeaText reads any vault-relative file, so it also serves a capture draft's own frontmatter.
+    const vaultFolder = relPath ? projectSlugForNote(relPath, readIdeaText, readIdeaText) : undefined;
     const hermesSlug = vaultFolder ? hermesSlugFor(vaultFolder) : undefined;
     if (!vaultFolder || !hermesSlug) return out;
     const folder = await lookup.folderForSlug(hermesSlug);

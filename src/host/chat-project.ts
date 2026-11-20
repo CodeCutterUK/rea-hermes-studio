@@ -46,9 +46,15 @@ export function hermesSlugFor(vaultFolder: string): string | undefined {
 export function projectSlugForNote(
   relPath: string,
   readIdeaText: (ideaFolderRelPath: string) => string | undefined,
+  readOwnText?: (relPath: string) => string | undefined,
 ): string | undefined {
   const parts = relPath.split(/[\\/]+/).filter(Boolean);
   if (parts[0] === "Projects" && parts[1]) return parts[1];
+  // A capture draft (Ideas/Inbox/<title>.md) has no idea folder yet, so it names its project in its own frontmatter.
+  if (parts[0] === "Ideas" && parts[1] === "Inbox" && parts.length === 3) {
+    const draftText = readOwnText?.(relPath);
+    return draftText ? projectFromIdeaFrontmatter(draftText) : undefined;
+  }
   if (parts[0] === "Ideas" && parts[1]) {
     const ideaText = readIdeaText(`Ideas/${parts[1]}/idea.md`);
     return ideaText ? projectFromIdeaFrontmatter(ideaText) : undefined;
@@ -62,9 +68,10 @@ export function chatFolderFor(
   projects: ReadonlyMap<string, ProjectFolder>,
   fallback: ProjectFolder,
   readIdeaText: (ideaFolderRelPath: string) => string | undefined,
+  readOwnText?: (relPath: string) => string | undefined,
 ): ProjectFolder {
   if (!relPath) return fallback;
-  const slug = projectSlugForNote(relPath, readIdeaText);
+  const slug = projectSlugForNote(relPath, readIdeaText, readOwnText);
   if (!slug) return fallback;
   return projects.get(slug) ?? fallback;
 }
