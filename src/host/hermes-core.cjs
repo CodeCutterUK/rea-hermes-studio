@@ -8845,6 +8845,22 @@ var hs = class extends Error {},
         this._model.meta.sessionId === e &&
           this.apply([{ op: "meta", patch: { title: r } }]));
     }
+    // A chat the plugin has not listed in this session: ask the server for its stored cwd, so a
+    // reopen does not fall back to the current folder and move it. Undefined when the server has none.
+    async folderFromServer(id) {
+      let client = this.client;
+      if (!client?.alive) return void 0;
+      let rows;
+      try {
+        rows = await client.listSessions(void 0);
+      } catch {
+        return void 0;
+      }
+      let row = (Array.isArray(rows?.sessions) ? rows.sessions : []).find((x) => x?.sessionId === id);
+      if (!row?.cwd) return void 0;
+      this.recentSessions.set(id, { ...(this.recentSessions.get(id) ?? {}), sessionId: id, cwd: row.cwd });
+      return { path: row.cwd, name: row.cwd.split(/[\\/]/).filter(Boolean).pop() ?? row.cwd };
+    }
     sessionFolderFor(id) {
       let cwd = this.recentSessions.get(id)?.cwd;
       return cwd ? { path: cwd, name: cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd } : void 0;
@@ -8957,7 +8973,7 @@ var hs = class extends Error {},
             return;
           }
           await this.leaveCurrentTurn();
-          let n = this.sessionFolderFor(e) ?? this.deps.folder();
+          let n = this.sessionFolderFor(e) ?? (await this.folderFromServer(e)) ?? this.deps.folder();
           if (!n) {
             this.setConnection({ state: "noFolder" });
             return;
