@@ -26,6 +26,21 @@ export function projectFromIdeaFrontmatter(text: string): string | undefined {
   return undefined;
 }
 
+// Vault folder name (under Projects/) -> Hermes project slug. The vault and the factory use the
+// short names; Hermes registers the projects under their repo names. Only live projects are listed.
+// Keep this in step with `hermes project list`.
+export const HERMES_SLUG_FOR_VAULT_FOLDER: ReadonlyMap<string, string> = new Map([
+  ["factory", "software-factory"],
+  ["ttm", "train-ticket-manager"],
+  ["itv", "llm-wiki-manager-itv"],
+  ["mini-library", "mini-library"],
+]);
+
+// The Hermes slug for a vault folder, or undefined when the folder has no Hermes project.
+export function hermesSlugFor(vaultFolder: string): string | undefined {
+  return HERMES_SLUG_FOR_VAULT_FOLDER.get(vaultFolder);
+}
+
 // Slug for a vault-relative note path, or undefined when the note is not in a project.
 // The idea case needs the note's text, so it is passed in and read only when needed.
 export function projectSlugForNote(

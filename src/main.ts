@@ -11,7 +11,12 @@ import {
   type TFile,
   type WorkspaceLeaf,
 } from "obsidian";
-import { chatFolderFor, type ProjectFolder, projectSlugForNote } from "./host/chat-project";
+import {
+  chatFolderFor,
+  hermesSlugFor,
+  type ProjectFolder,
+  projectSlugForNote,
+} from "./host/chat-project";
 import { type ActivatedHermesCore, activateHermesCore } from "./host/hermes-core-bridge";
 import { VaultNoteTracker } from "./host/note-tracker";
 import { createObsidianVscodeShim, SimpleUri } from "./host/obsidian-shim";
@@ -758,10 +763,11 @@ export default class HermesStudioPlugin extends Plugin {
     lookup: ReturnType<typeof createProjectFolderLookup>,
   ): Promise<Map<string, ProjectFolder>> {
     const out = new Map<string, ProjectFolder>();
-    const slug = relPath ? projectSlugForNote(relPath, readIdeaText) : undefined;
-    if (!slug) return out;
-    const folder = await lookup.folderForSlug(slug);
-    if (folder) out.set(slug, folder);
+    const vaultFolder = relPath ? projectSlugForNote(relPath, readIdeaText) : undefined;
+    const hermesSlug = vaultFolder ? hermesSlugFor(vaultFolder) : undefined;
+    if (!vaultFolder || !hermesSlug) return out;
+    const folder = await lookup.folderForSlug(hermesSlug);
+    if (folder) out.set(vaultFolder, folder);
     return out;
   }
 

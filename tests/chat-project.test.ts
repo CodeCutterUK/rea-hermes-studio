@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   chatFolderFor,
+  HERMES_SLUG_FOR_VAULT_FOLDER,
+  hermesSlugFor,
   type ProjectFolder,
   projectFromIdeaFrontmatter,
   projectSlugForNote,
@@ -80,5 +82,20 @@ describe("chatFolderFor", () => {
   it("routes an idea note through its project", () => {
     const read = () => "---\nproject: ttm\n---\n";
     expect(chatFolderFor("Ideas/20261113-0044-audit/idea.md", PROJECTS, VAULT, read)).toEqual(TTM);
+  });
+});
+
+describe("vault folder to Hermes project slug", () => {
+  it("maps each live vault folder to the Hermes project id the user confirmed", () => {
+    expect(hermesSlugFor("factory")).toBe("software-factory");
+    expect(hermesSlugFor("ttm")).toBe("train-ticket-manager");
+    expect(hermesSlugFor("itv")).toBe("llm-wiki-manager-itv");
+    expect(hermesSlugFor("mini-library")).toBe("mini-library");
+  });
+
+  it("has no entry for the retired 'mini' folder, or for an unknown folder", () => {
+    expect(hermesSlugFor("mini")).toBeUndefined();
+    expect(hermesSlugFor("nope")).toBeUndefined();
+    expect(HERMES_SLUG_FOR_VAULT_FOLDER.size).toBe(4);
   });
 });
